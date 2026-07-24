@@ -1,0 +1,63 @@
+# Virtual host gerado automaticamente pelo Puppet - client_hosting
+# Cliente: <%= @client_name %>
+# Worker OpenLiteSpeed + LSPHP + LSCache (full-page cache)
+
+docRoot                   <%= @public_html %>
+vhDomain                  <%= @domain %>
+vhAliases                 www.<%= @domain %>
+adminEmails               admin@<%= @domain %>
+enableGzip                1
+enableIpGeo               0
+
+errorlog <%= @log_dir %>/ols-error.log {
+  useServer               0
+  logLevel                WARN
+  rollingSize             10M
+}
+
+accesslog <%= @log_dir %>/ols-access.log {
+  useServer               0
+  logHeaders              5
+  rollingSize             10M
+  keepDays                10
+}
+
+index  {
+  useServer               0
+  indexFiles              index.php, index.html
+}
+
+scripthandler  {
+  add                     lsapi:lsphp<%= @client_hosting::lsphp_version %> php
+}
+
+extprocessor lsphp<%= @client_hosting::lsphp_version %> {
+  type                    lsapi
+  address                 <%= @lsphp_sock %>
+  maxConns                10
+  env                     PHP_LSAPI_CHILDREN=10
+  initTimeout             60
+  persistConn             1
+  autoStart               1
+  path                    /usr/local/lsws/lsphp<%= @client_hosting::lsphp_version %>/bin/lsphp
+  extUser                 <%= @client_name %>
+  extGroup                <%= @client_name %>
+}
+
+# --- LSCache: full-page cache habilitado para este virtual host ---
+cache  {
+  enableCache             1
+  qsCache                 1
+  reqCookieCache          1
+  respCookieCache         1
+  ignoreReqCacheCtrl      1
+  ignoreRespCacheCtrl     0
+  enablePrivateCache      1
+  privateExpireInSeconds  120
+  defaultExpireInSeconds  3600
+}
+
+rewrite  {
+  enable                  1
+  autoLoadHtaccess        1
+}

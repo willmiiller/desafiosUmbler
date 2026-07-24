@@ -1,0 +1,26 @@
+server {
+
+    listen 80;
+
+    server_name <%= @domain %>;
+
+    root /srv/clients/<%= @title %>/public_html;
+
+    index index.php index.html;
+
+    access_log /srv/clients/<%= @title %>/logs/access.log;
+    error_log  /srv/clients/<%= @title %>/logs/error.log;
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+
+        include snippets/fastcgi-php.conf;
+
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+
+    }
+
+}
