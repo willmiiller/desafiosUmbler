@@ -1,0 +1,210 @@
+Vagrant.configure("2") do |config|
+
+  BOX = "generic/ubuntu2204"
+
+  # ====================================================
+  # PUPPET SERVER
+  # ====================================================
+  config.vm.define "puppet" do |puppet|
+
+    puppet.vm.box = BOX
+    puppet.vm.hostname = "puppet"
+
+    puppet.vm.network "public_network",
+      bridge: "wlp3s0",
+      ip: "192.168.122.100"
+
+    # Compartilha o projeto inteiro
+    puppet.vm.synced_folder ".", "/tmp/client_hosting_sync"
+
+    puppet.vm.provider "virtualbox" do |vb|
+      vb.name   = "puppet-server"
+      vb.memory = 4096
+      vb.cpus   = 2
+    end
+
+    puppet.vm.provision "shell", inline: <<-SHELL
+
+      apt-get update
+
+      apt-get install -y wget curl git tree
+
+      wget -q https://apt.puppet.com/puppet8-release-jammy.deb
+
+      dpkg -i puppet8-release-jammy.deb
+
+      apt-get update
+
+      apt-get install -y puppetserver
+
+      # Ajuste de memória para laboratório
+      sed -i 's/-Xms2g/-Xms512m/g' /etc/default/puppetserver
+      sed -i 's/-Xmx2g/-Xmx512m/g' /etc/default/puppetserver
+
+      cat <<EOF >> /etc/hosts
+
+192.168.122.100 puppet puppet.home.arpa
+192.168.122.101 node-1 node-1.home.arpa
+192.168.122.102 node-2 node-2.home.arpa
+
+EOF
+
+      systemctl enable puppetserver
+      systemctl restart puppetserver
+
+    SHELL
+
+    # Instala dependências Puppet
+    puppet.vm.provision "shell", run: "always", inline: <<-SHELL
+
+      if [ ! -d /etc/puppetlabs/code/environments/production/modules/mysql ]; then
+        /opt/puppetlabs/bin/puppet module install puppetlabs-mysql
+      fi
+
+    SHELL
+
+puppet.vm.provision "shell", run: "always", inline: <<-SHELL
+
+  MODULE_DIR="/etc/puppetlabs/code/environments/production/modules/client_hosting"
+  ENV_DIR="/etc/puppetlabs/code/environments/production"
+
+  rm -rf "${MODULE_DIR}"
+
+  mkdir -p "${MODULE_DIR}"
+  mkdir -p "${ENV_DIR}/manifests"
+
+  # Módulo Puppet
+  cp -r /tmp/client_hosting_sync/manifests "${MODULE_DIR}/"
+  cp -r /tmp/client_hosting_sync/templates "${MODULE_DIR}/"
+
+  [ -d /tmp/client_hosting_sync/examples ] && \
+    cp -r /tmp/client_hosting_sync/examples "${MODULE_DIR}/"
+
+  [ -f /tmp/client_hosting_sync/README.md ] && \
+    cp /tmp/client_hosting_sync/README.md "${MODULE_DIR}/"
+
+  [ -f /tmp/client_hosting_sync/metadata.json ] && \
+    cp /tmp/client_hosting_sync/metadata.json "${MODULE_DIR}/"
+
+  # Site.pp do ambiente Puppet
+  if [ -f /tmp/client_hosting_sync/manifests/site.pp ]; then
+    cp /tmp/client_hosting_sync/manifests/site.pp \
+       "${ENV_DIR}/manifests/site.pp"
+  fi
+
+  chown -R root:root "${MODULE_DIR}"
+
+  echo "================================="
+  echo "Modulo client_hosting sincronizado"
+  echo "site.pp sincronizado"
+  echo "================================="
+
+SHELL
+
+  end
+
+  # ====================================================
+  # NODE-1 (PRODUCTION)
+  # ====================================================
+  config.vm.define "node-1" do |node|
+
+    node.vm.box = BOX
+    node.vm.hostname = "node-1"
+
+    node.vm.network "public_network",
+      bridge: "wlp3s0",
+      ip: "192.168.122.101"
+
+    node.vm.provider "virtualbox" do |vb|
+      vb.name   = "node-1-production"
+      vb.memory = 1024
+      vb.cpus   = 1
+    end
+
+    node.vm.provision "shell", inline: <<-SHELL
+
+      apt-get update
+
+      wget -q https://apt.puppet.com/puppet8-release-jammy.deb
+
+      dpkg -i puppet8-release-jammy.deb
+
+      apt-get update
+
+      apt-get install -y puppet-agent
+
+      cat <<EOF >> /etc/hosts
+
+192.168.122.100 puppet puppet.home.arpa
+192.168.122.101 node-1 node-1.home.arpa
+192.168.122.102 node-2 node-2.home.arpa
+
+EOF
+
+      mkdir -p /etc/puppetlabs/puppet
+
+      cat <<EOF > /etc/puppetlabs/puppet/puppet.conf
+[main]
+server = puppet
+
+[agent]
+environment = production
+EOF
+
+    SHELL
+
+  end
+
+  # ====================================================
+  # NODE-2 (HOMOLOG)
+  # ====================================================
+  config.vm.define "node-2" do |node|
+
+    node.vm.box = BOX
+    node.vm.hostname = "node-2"
+
+    node.vm.network "public_network",
+      bridge: "wlp3s0",
+      ip: "192.168.122.102"
+
+    node.vm.provider "virtualbox" do |vb|
+      vb.name   = "node-2-hml"
+      vb.memory = 1024
+      vb.cpus   = 1
+    end
+
+    node.vm.provision "shell", inline: <<-SHELL
+
+      apt-get update
+
+      wget -q https://apt.puppet.com/puppet8-release-jammy.deb
+
+      dpkg -i puppet8-release-jammy.deb
+
+      apt-get update
+
+      apt-get install -y puppet-agent
+
+      cat <<EOF >> /etc/hosts
+
+192.168.122.100 puppet puppet.home.arpa
+192.168.122.101 node-1 node-1.home.arpa
+192.168.122.102 node-2 node-2.home.arpa
+
+EOF
+
+      mkdir -p /etc/puppetlabs/puppet
+
+      cat <<EOF > /etc/puppetlabs/puppet/puppet.conf
+[main]
+server = puppet
+
+[agent]
+environment = staging
+EOF
+
+    SHELL
+
+  end
+
+end
