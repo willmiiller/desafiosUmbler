@@ -1,0 +1,14 @@
+{
+    "name": "wqmuller-client_hosting",
+    "version": "1.0.0",
+    "author": "William Muller",
+    "summary": "Provisionamento automatizado de hospedagem WordPress",
+    "license": "MIT",
+    "source": "https://github.com/wqmuller/desafiosUmbler",
+    "dependencies": [
+        {
+            "name": "puppetlabs/mysql",
+            "version_requirement": ">= 17.0.0"
+        }
+    ]
+}
